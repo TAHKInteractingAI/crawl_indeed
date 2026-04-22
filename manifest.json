@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Indeed Job Crawler",
+  "version": "1.0",
+  "description": "Tự động thu thập dữ liệu việc làm từ Indeed.",
+  "permissions": ["scripting", "tabs", "downloads", "storage"],
+  "action": {
+    "default_title": "Indeed Job Crawler",
+    "default_icon": "icon.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://*.indeed.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.indeed.com/jobs*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ]
+}

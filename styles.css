@@ -1,0 +1,64 @@
+#indeed-crawler-panel {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 800px;
+  max-height: 500px;
+  background: white;
+  border: 1px solid #ccc;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+#indeed-crawler-controls {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  justify-content: space-between;
+  align-items: center;
+  background: #f9f9f9;
+}
+
+#indeed-crawler-controls button {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+#indeed-start-btn { background: #4CAF50; color: white; }
+#indeed-stop-btn { background: #ff4444; color: white; }
+#indeed-reset-btn { background: #999; color: white; }
+
+#indeed-crawler-status {
+  padding: 6px;
+  border-top: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  background: #eee;
+  font-style: italic;
+}
+
+#indeed-crawler-table-wrapper {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+#indeed-crawler-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#indeed-crawler-table th,
+#indeed-crawler-table td {
+  border: 1px solid #ccc;
+  padding: 4px;
+  text-align: left;
+}
+
+#indeed-crawler-table th {
+  background: #f0f0f0;
+}
