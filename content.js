@@ -6,6 +6,33 @@ let allJobs = [];
 let maxPages = 1; // crawl tối đa 5 trang
 let hasExported = false;
 
+  const url = "https://script.google.com/macros/s/AKfycbxa4coYgHwSupMeexAW7WTaOp89oYVVRZ5f4yskwQB_KoSKjEpx5PzEst8g5TRb4LdJ/exechttps://script.google.com/macros/s/AKfycbyY_lNbVn1Jp6GDd_5CuQS3whL-W4gqHV7eYYTCLPART5eGfjvCGlSLMPlTEaO2mK7i/exec";
+let existingKeys = new Set();
+
+async function loadExistingKeys() {
+    const sheetName = (query || "Indeed Crawl")
+    .replace(/[\/\\\?\*\[\]]/g, "")
+    .substring(0, 100);
+
+    const urlWithParams = `${url}?sheetName=${encodeURIComponent(sheetName)}`;
+
+    return new Promise((resolve, reject) => {
+      chrome.runtime.sendMessage({ action: "getSheetId", url: urlWithParams }, response => {
+        try {
+            // Get the existing keys from the response data
+            const data = JSON.parse(response.data);
+            existingKeys = new Set(data.ids|| []);
+            console.log("Loaded existing keys:", existingKeys.size);
+        
+        } catch (err) {
+          console.error("Error parsing existing keys:", err);
+        } finally {
+          resolve();
+        }
+      });
+  });
+}
+
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -21,6 +48,29 @@ function log(...args) {
   console.log("[Indeed Crawler]", ...args);
 }
 
+async function sendToGoogleSheets(jobs) {
+  const urlParams = new URLSearchParams(window.location.search);
+  const query = urlParams.get("q");
+
+  const sheetName = (query || "Indeed Crawl")
+    .replace(/[\/\\\?\*\[\]]/g, "")
+    .substring(0, 100);
+  
+  const payload = {
+    sheetName,
+    jobs
+  };
+
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ action: "saveToSheets", url, payload }, response => {
+      if (response && response.success) {
+        resolve(response.data);
+      } else {
+        reject(new Error(response?.error || "Unknown error"));
+      }
+    });
+  });
+}
 
 // 1. Cải thiện hàm lấy lương ngay trên Card
 function getSalaryFromCard(card) {
@@ -92,7 +142,7 @@ function createPanel() {
       <table id="indeed-crawler-table">
         <thead>
           <tr>
-            <th>Company</th><th>Job Title</th><th>Link</th><th>Salary</th><th>Location</th><th>Page</th><th>Easily Apply</th>
+            <th>Company</th><th>Job Title</th><th>Link</th><th>Salary</th><th>Location</th><th>Page</th><th>Easily Apply</th><th>Apply Method</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -110,7 +160,7 @@ function createPanel() {
     startCrawl();
   };
 
-  document.getElementById("indeed-stop-btn").onclick = () => {
+  document.getElementById("indeed-stop-btn").onclick = async () => {
     if (!isCrawling && allJobs.length === 0) {
       updateStatus("Chưa có dữ liệu để xuất.");
       return;
@@ -119,6 +169,7 @@ function createPanel() {
     chrome.storage.local.set({ isCrawling: false });
     updateStatus("Đã tạm dừng crawl và xuất file.");
     exportCSV();
+    await sendToGoogleSheets(allJobs);
   };
 
   document.getElementById("indeed-reset-btn").onclick = () => {
@@ -226,7 +277,7 @@ async function crawlPage() {
       }
 
       const titleLink = card.querySelector("h2.jobTitle a");
-      if (!titleLink) continue;
+
 
       const jobKey = titleLink.dataset.jk || titleLink.href.match(/jk=([^&]+)/)?.[1];
       const jobTitle = titleLink.innerText.trim();
@@ -239,9 +290,13 @@ async function crawlPage() {
         ? "Yes"
         : "No";
 
-
-      const fingerprint = (jobCompany + jobTitle + jobLocation).toLowerCase().replace(/\s/g, '');
-      if (allJobs.some(job => job.fingerprint === fingerprint)) continue;
+      if (existingKeys.has(jobKey)) {
+        log(`🔍 Job ${jobTitle} đã tồn tại, bỏ qua.`);
+        continue;
+      } if (allJobs.some(j => j.key === jobKey)) {
+        log(`🔍 Job ${jobTitle} đã tồn tại trong session, bỏ qua.`);
+        continue;
+      }
 
       // XỬ LÝ LƯƠNG
       let salary = getSalaryFromCard(card);
@@ -271,15 +326,14 @@ async function crawlPage() {
 
       const job = {
         key: jobKey,
-        fingerprint,
         title: jobTitle,
         company: jobCompany,
         location: jobLocation,
         salary: salary || "N/A",
-        //applyMethod: applyMethod || "N/A",
         link: titleLink.href,
         page: currentPage,
-        easilyApply: easilyApply
+        easilyApply: easilyApply,
+        applyMethod: applyMethod || "N/A",
       };
 
       allJobs.push(job);
@@ -334,18 +388,21 @@ function localizeApplyMethod(methodText) {
   return methodText;
 }
 
-function randomDelay(min = 1200, max = 3500) {
-  return new Promise(resolve => {
-    const time = min + Math.random() * (max - min);
-    setTimeout(resolve, time);
-  });
-}
-
-function finishCrawl(reason) {
+async function finishCrawl(reason) {
   updateStatus(reason);
   if (!hasExported) {
     exportCSV();
     hasExported = true;
+  }
+
+  try {
+    updateStatus(`Crawl hoàn tất: ${reason} | Tổng công việc thu thập: ${allJobs.length} | Đang gửi dữ liệu đến Google Sheets...`);
+    const res = await sendToGoogleSheets(allJobs);
+    console.log("Kết quả gửi Google Sheets:", res);
+    updateStatus('Đã gửi dữ liệu đến Google Sheets thành công! Bạn có thể kiểm tra lại trang tính của mình.');
+  } catch (err) {
+    console.error("Lỗi gửi Google Sheets:", err);
+    updateStatus('Lỗi khi gửi dữ liệu đến Google Sheets. Vui lòng thử lại sau.');
   }
   isCrawling = false;
   chrome.storage.local.set({ isCrawling: false });
