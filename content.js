@@ -6,32 +6,8 @@ let allJobs = [];
 let maxPages = 1; // crawl tối đa 5 trang
 let hasExported = false;
 
-  const url = "https://script.google.com/macros/s/AKfycbxa4coYgHwSupMeexAW7WTaOp89oYVVRZ5f4yskwQB_KoSKjEpx5PzEst8g5TRb4LdJ/exechttps://script.google.com/macros/s/AKfycbyY_lNbVn1Jp6GDd_5CuQS3whL-W4gqHV7eYYTCLPART5eGfjvCGlSLMPlTEaO2mK7i/exec";
+  const url = "https://script.google.com/macros/s/AKfycbwZyM19-hv2Z9Fz1z4lgnaOftjC4mDsCQrsD9IxTI3ChnjUBmoReELMOhQ8dIqsOHiY/exec";
 let existingKeys = new Set();
-
-async function loadExistingKeys() {
-    const sheetName = (query || "Indeed Crawl")
-    .replace(/[\/\\\?\*\[\]]/g, "")
-    .substring(0, 100);
-
-    const urlWithParams = `${url}?sheetName=${encodeURIComponent(sheetName)}`;
-
-    return new Promise((resolve, reject) => {
-      chrome.runtime.sendMessage({ action: "getSheetId", url: urlWithParams }, response => {
-        try {
-            // Get the existing keys from the response data
-            const data = JSON.parse(response.data);
-            existingKeys = new Set(data.ids|| []);
-            console.log("Loaded existing keys:", existingKeys.size);
-        
-        } catch (err) {
-          console.error("Error parsing existing keys:", err);
-        } finally {
-          resolve();
-        }
-      });
-  });
-}
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -73,54 +49,6 @@ async function sendToGoogleSheets(jobs) {
 }
 
 // 1. Cải thiện hàm lấy lương ngay trên Card
-function getSalaryFromCard(card) {
-  const selectors = [
-    ".salary-snippet-container",
-    ".salary-snippet",
-    ".estimated-salary",
-    "span[data-testid='salary-snippet']",
-    ".metadata.salary-snippet-container",
-    "div.attribute_snippet" // Một số vùng chứa lương mới
-  ];
-
-  for (let selector of selectors) {
-    const el = card.querySelector(selector);
-    if (el && el.innerText.trim() !== "") {
-      const text = el.innerText.trim();
-      // Kiểm tra xem text có chứa số không để tránh lấy nhầm text "Full-time"
-      if (/\d/.test(text)) return text;
-    }
-  }
-  return "N/A";
-}
-function getSalaryFromText(card) {
-  // Mở rộng selector để lấy toàn bộ phần mô tả tóm tắt
-  const snippet = card.querySelector(".job-snippet") || 
-                  card.querySelector("[data-testid='job-snippet']") ||
-                  card.querySelector(".metadataContainer");
-
-  if (snippet) {
-    const text = snippet.innerText.replace(/\s+/g, ' '); // Làm sạch khoảng trắng và xuống dòng
-    
-    // Danh sách từ khóa mở rộng
-    const keywords = ["lương", "mức lương", "thu nhập", "thỏa thuận", "cạnh tranh", "vốn", "triệu"];
-    
-    // Cách 1: Tách theo dấu chấm hoặc dấu phẩy để lấy câu chứa từ khóa
-    const sentences = text.split(/[.;]/); 
-    for (let sentence of sentences) {
-      const s = sentence.toLowerCase();
-      if (keywords.some(kw => s.includes(kw))) {
-        return sentence.trim();
-      }
-    }
-    
-    // Cách 2: Nếu không tách được câu, kiểm tra xem text có chứa từ "Lương" không
-    if (text.toLowerCase().includes("lương")) {
-       return text.substring(0, 100) + "..."; // Lấy tạm một đoạn văn bản
-    }
-  }
-  return "N/A";
-}
 
 function createPanel() {
   if (document.querySelector("#indeed-crawler-panel")) return;
@@ -142,7 +70,7 @@ function createPanel() {
       <table id="indeed-crawler-table">
         <thead>
           <tr>
-            <th>Company</th><th>Job Title</th><th>Link</th><th>Salary</th><th>Location</th><th>Page</th><th>Easily Apply</th><th>Apply Method</th>
+            <th>Company</th><th>Job Title</th><th>Link</th><th>Salary</th><th>Location</th><th>Page</th><th>Apply Method</th><th>Keyword</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -198,7 +126,8 @@ function appendToTable(job) {
     <td>${job.salary || "N/A"}</td>
     <td>${job.location || "N/A"}</td>
     <td>${job.page}</td>
-    <td>${job.easilyApply}</td>
+    <td>${job.apply_method || "N/A"}</td>
+    <td>${job.keyword ? job.keyword : "N/A"}</td>
   `;
   document.querySelector("#indeed-crawler-table tbody").appendChild(row);
 }
@@ -259,6 +188,9 @@ async function waitForJobCards(timeout = 15000) {
 
 
 async function crawlPage() {
+  const urlParams = new URLSearchParams(window.location.search);
+  // Query + California là keyword
+  const keyword = urlParams.get("q") ? urlParams.get("q") + " California" : "California";
   try {
     updateStatus(`Đang crawl trang ${currentPage}...`);
     const jobCards = await waitForJobCards();
@@ -285,11 +217,6 @@ async function crawlPage() {
       const jobCompany = (card.querySelector("[data-testid='company-name']") || card.querySelector(".companyName"))?.innerText.trim() || "N/A";
       const jobLocation = (card.querySelector("[data-testid='text-location']") || card.querySelector(".companyLocation"))?.innerText.trim() || "N/A";
 
-      const easilyApply = card.querySelector('[data-testid="indeedApply"]') ||
-                          card.innerText.toLowerCase().includes("nộp đơn dễ dàng")
-        ? "Yes"
-        : "No";
-
       if (existingKeys.has(jobKey)) {
         log(`🔍 Job ${jobTitle} đã tồn tại, bỏ qua.`);
         continue;
@@ -298,31 +225,23 @@ async function crawlPage() {
         continue;
       }
 
+      
       // XỬ LÝ LƯƠNG
-      let salary = getSalaryFromCard(card);
-      let applyMethod = "Unknown";
+      let salary = "N/A"
+      let apply_method = "N/A";
 
-      // Nếu dễ dàng apply, apply method có thể là Apply now with Indeed, còn nếu không thì chưa rõ
 
-      if (easilyApply === "Yes") {
-        applyMethod = "Apply Now With Indeed";
+      await randomDelay(2000, 5000); // Đợi thêm trước khi fetch detail để tránh bị nghi ngờ
+
+      const detail = await fetchJobDetail(jobKey, jobTitle) || {};
+      if (detail.salary) {
+        salary = detail.salary;
       }
 
-      const needsSalary = salary === "N/A";
-      const needsApply = applyMethod === "Unknown";
-
-      const shouldFetchDetail = (needsSalary && Math.random() < 0.7) || (needsApply && Math.random() < 0.3); // Nếu cần lương hoặc phương thức apply và xác suất 70%
-      if (shouldFetchDetail) {
-        await randomDelay(2000, 5000); // Đợi thêm trước khi fetch detail để tránh bị nghi ngờ
-        const detail = await fetchJobDetail(jobKey, jobTitle) || {};
-        if (needsSalary && detail.salary) {
-          salary = detail.salary;
-        }
-
-        if (needsApply && detail.applyMethod && detail.applyMethod !== "N/A") {
-          applyMethod = detail.applyMethod;
-        }
+      if (detail.apply_method && detail.apply_method !== "N/A") {
+      apply_method = detail.apply_method;
       }
+      
 
       const job = {
         key: jobKey,
@@ -332,12 +251,13 @@ async function crawlPage() {
         salary: salary || "N/A",
         link: titleLink.href,
         page: currentPage,
-        easilyApply: easilyApply,
-        applyMethod: applyMethod || "N/A",
+        keyword,
+        apply_method: apply_method || "N/A",
       };
 
       allJobs.push(job);
       appendToTable(job);
+      existingKeys.add(jobKey);
       chrome.storage.local.set({ allJobs });
     }
 
@@ -375,7 +295,7 @@ async function crawlPage() {
   }
 }
 
-function localizeApplyMethod(methodText) {
+function localizeapply_method(methodText) {
   const text = methodText.toLowerCase();
   
   if (text.includes("company site") || text.includes("site")) {
@@ -415,78 +335,41 @@ async function fetchJobDetail(jobKey, jobTitle) {
       chrome.runtime.sendMessage({ action: "fetchJobHTML", url }, resolve);
     });
 
-    if (!response || !response.success) return {salary: "N/A", applyMethod: "N/A"};
+    if (!response || !response.success) return {salary: "N/A", apply_method: "N/A"};
 
     const doc = new DOMParser().parseFromString(response.html, "text/html");
-    const fullDescEl = doc.querySelector("#jobDescriptionText");
 
-    let rawMethod = "N/A";
-
-    const applyBtn = doc.querySelector('#indeedApplyButton') || 
-                     doc.querySelector('button[buttontype="primary"]') || 
-                     doc.querySelector('button[contenthtml="Apply on company site"]') ||
-                     doc.querySelector('[data-testid*="indeedApplyButton-test"]');
-    console.log("Apply button element:", applyBtn);
-    if (applyBtn) {
-      rawMethod = applyBtn.getAttribute("contenthtml") || 
-                  applyBtn.getAttribute("aria-label")?.replace("opens in a new tab", "").replace(/[()]/g, "").trim() || 
-                  applyBtn.innerText.replace(/\n/g, ' ').trim();
-    }
-    console.log("Raw apply method:", rawMethod);
-    let applyMethod = localizeApplyMethod(rawMethod || "N/A");
-
-
-    // Lấy lương
     let salary = "N/A";
-    let detectCase = "N/A";
-
-    if (fullDescEl) {
-      const lines = fullDescEl.innerText.split('\n');
-      const moneyRegex = /(\d{1,3}([.,]\d{3})*|\d+)/g;
-
-      for (let line of lines) {
-        const lowerLine = line.toLowerCase().trim();
-        if (lowerLine.length < 5) continue;
-
-        // BƯỚC 1: ƯU TIÊN CAO NHẤT - TÌM SỐ TIỀN CỤ THỂ
-        const matches = lowerLine.match(moneyRegex);
-        if (matches && matches.some(m => m.replace(/[.,]/g, '').length >= 6)) {
-          if (lowerLine.includes("lương") || lowerLine.includes("thu nhập") || lowerLine.includes("salary")) {
-            salary = `${matches[0]} VNĐ`;
-            detectCase = "Case 1: Specific Amount Found";
-            break; // Tìm thấy số tiền cụ thể thì dừng luôn
-          }
-        }
-
-        // BƯỚC 2: QUÉT CÁC DÒNG NHƯ ẢNH ANH GỬI (Thu nhập cạnh tranh, Lương tháng,...)
-        if (lowerLine.includes("cạnh tranh") || lowerLine.includes("lương tháng") || lowerLine.includes("hấp dẫn") || lowerLine.includes("lương")) {
-          if (salary === "N/A") { 
-            salary = "Có lương";
-            detectCase = "Case 2: Competitive/Attractive (Photo case)";
-          }
-        }
-
-        // BƯỚC 3: NẾU GHI RÕ CHỮ THỎA THUẬN
-        if (lowerLine.includes("thỏa thuận") || lowerLine.includes("negotiable")) {
-          if (salary === "N/A" || salary === "Có lương") {
-            salary = "Thỏa thuận";
-            detectCase = "Case 3: Explicitly Negotiable";
-          }
-        }
-      }
+    const salaryElement = doc.getElementById("salaryInfoAndJobType");
+    if (salaryElement) {
+      // Chỉ lấy nguyên văn những gì hiện ra trên trang chi tiết, không đụng chạm vào nội dung
+      salary = salaryElement.innerText.trim();
     }
-    console.log(`[Crawl] Job: ${jobTitle.substring(0,20)} | Case: ${detectCase} | Res: ${salary}`);
-    return { salary, applyMethod };
+
+    const indeedApplyBtn = doc.querySelector('#indeedApplyButton');
+    // Sau đó thử lấy nút Apply on Company Site
+    const companyApplyBtn = doc.querySelector('#applyButtonLinkContainer button');
+    let apply_method = "N/A";
+
+    if (indeedApplyBtn) {
+      apply_method = "Apply Now With Indeed";
+    }
+    else if (companyApplyBtn) {
+      apply_method = "Apply on Company Site";
+    }
+
+    console.log(`[Crawl] Job: ${jobTitle.substring(0,20)} | Res: ${salary}`);
+    return { salary, apply_method };
   } catch (err) {
     console.error("Lỗi fetch:", err);
-    return { salary: "N/A", applyMethod: "N/A" };
+    return { salary: "N/A", apply_method: "N/A" };
   }
 }
 function exportCSV() {
   log("Bắt đầu xuất file CSV với", allJobs.length, "job");
-  const headers = ["CompanyName", "Job Title", "Link", "Salary", "Location", "Page", "Easily Apply"];
+  const headers = ["Key", "CompanyName", "Job Title", "Link", "Salary", "Location", "Page", "Apply Method"];
   const rows = allJobs.map(j =>
-    [j.company, j.title, j.link, j.salary, j.location, j.page, j.easilyApply].map(v => {
+    [j.key, j.company, j.title, j.link, j.salary, j.location, j.page, j.apply_method].map(v => {
       const val = (typeof v === 'string' || typeof v === 'number') ? v.toString() : '';
       return `"${val.replace(/"/g, '""')}"`;
     }).join(",")
