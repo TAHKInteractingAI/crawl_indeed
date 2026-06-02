@@ -16,7 +16,7 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://*.indeed.com/jobs*"],
+      "matches": ["https://*.indeed.com/*"],
       "js": ["content.js"],
       "css": ["styles.css"]
     }

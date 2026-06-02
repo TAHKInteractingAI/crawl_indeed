@@ -2,8 +2,8 @@
   position: fixed;
   bottom: 20px;
   right: 20px;
-  width: 800px;
-  max-height: 500px;
+  width: 500px;
+  max-height: 300px;
   background: white;
   border: 1px solid #ccc;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -33,6 +33,82 @@
 #indeed-start-btn { background: #4CAF50; color: white; }
 #indeed-stop-btn { background: #ff4444; color: white; }
 #indeed-reset-btn { background: #999; color: white; }
+#indeed-csv-btn { background: #2196F3; color: white; }
+
+#indeed-crawler-controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#indeed-crawler-filter {
+  padding: 8px;
+  border-top: 1px solid #ccc;
+  background: #f9f9f9;
+}
+
+#indeed-crawler-filter label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: bold;
+  color: #333;
+}
+
+#filter-keywords-input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+#indeed-filter-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  background: #FF9800;
+  color: white;
+}
+
+#indeed-filter-btn:hover {
+  background: #F57C00;
+}
+
+#indeed-crawler-location-filter {
+  padding: 8px;
+  border-top: 1px solid #ccc;
+  background: #f9f9f9;
+}
+
+#indeed-crawler-location-filter label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: bold;
+  color: #333;
+}
+
+#filter-locations-input {
+  flex: 1;
+  padding: 4px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+#indeed-location-filter-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  background: #009688;
+  color: white;
+}
+
+#indeed-location-filter-btn:hover {
+  background: #00796B;
+}
 
 #indeed-crawler-status {
   padding: 6px;
@@ -43,7 +119,7 @@
 }
 
 #indeed-crawler-table-wrapper {
-  max-height: 400px;
+  max-height: 200px;
   overflow-y: auto;
 }
 
