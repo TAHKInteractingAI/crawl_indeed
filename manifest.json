@@ -17,8 +17,14 @@
   "content_scripts": [
     {
       "matches": ["https://*.indeed.com/*"],
-      "js": ["content.js"],
+      "js": ["ui.js", "content.js"],
       "css": ["styles.css"]
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["config.json"],
+      "matches": ["https://*.indeed.com/*"]
     }
   ]
 }
