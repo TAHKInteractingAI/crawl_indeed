@@ -72,6 +72,40 @@ function looksLikeSalary(text) {
   return false;
 }
 
+function extractSalaryFromText(text) {
+  if (!text) return null;
+  const patterns = [
+    /(\$[\d,]+(?:\s*[-–—toànếnđến]+\s*\$[\d,]+)?(?:\s*(?:a year|an hour|a month|a day|a week|per year|per hour|per month))?)/i,
+    /((?:[$€£¥₹₩₫₺₽₴฿]|[\d\s.,]+[đĐ]\b|\b[đĐ][\d\s.,]+|\b(?:RM|R\$|kr|zł|Rp|Rs|CHF|VND|VNĐ)\b)\s*[\d.,\s]+(?:\s*[-–—toànếnđến]+\s*(?:[$€£¥₹₩₫₺₽₴฿]|[\d\s.,]+[đĐ]\b|\b[đĐ][\d\s.,]+|\b(?:RM|R\$|kr|zł|Rp|Rs|CHF|VND|VNĐ)\b)?\s*[\d.,\s]+)?(?:\s*(?:a year|an hour|a month|a day|a week|per year|per hour|per month|\/\s*(?:tháng|năm|giờ|thang|nam|gio|month|year|hr)))?)/i,
+    /(\d+[\d.,]*\s*(?:triệu|tr|nghìn|ngàn|k)(?:\s*[-–—toànếnđến]+\s*\d+[\d.,]*\s*(?:triệu|tr|nghìn|ngàn|k))?(?:\s*\/\s*(?:tháng|năm|giờ))?)/i
+  ];
+  for (const p of patterns) {
+    const m = text.match(p);
+    if (m && m[1] && looksLikeSalary(m[1].trim())) {
+      return m[1].trim();
+    }
+  }
+  return null;
+}
+
+function dismissPopups() {
+  const closeSelectors = [
+    'button[aria-label="Close"]',
+    'button[aria-label="close"]',
+    'button[aria-label="Đóng"]',
+    'button[aria-label="dismiss"]',
+    '[data-testid="modal-close-button"]',
+    '.icl-CloseButton',
+    'button[class*="CloseButton"]'
+  ];
+  for (const sel of closeSelectors) {
+    const btn = document.querySelector(sel);
+    if (btn && btn.offsetParent !== null) {
+      try { btn.click(); } catch {}
+    }
+  }
+}
+
 function extractSalaryFromDescription(text) {
   if (!text) return null;
   const patterns = [
@@ -228,6 +262,7 @@ async function crawlPage(startIndex = 0) {
     for (let i = startIndex; i < jobCards.length; i++) {
       if (!isCrawling) return false;
 
+      dismissPopups();
       const card = jobCards[i];
       card.scrollIntoView({ behavior: 'smooth' });
       await wait(1000);
@@ -288,11 +323,13 @@ async function crawlPage(startIndex = 0) {
 
       const hasSplitPane = !!document.querySelector(CONFIG.selectors.sidePanelContainers.join(", "));
 
-      if ((salary === "N/A" || applyMethod === "N/A") && hasSplitPane && titleLink) {
+      if ((salary === "N/A" || applyMethod === "N/A") && hasSplitPane) {
         try {
-          const preventNav = (e) => { e.preventDefault(); };
-          titleLink.addEventListener('click', preventNav, { once: true });
-          titleLink.click();
+          if (titleLink) {
+            titleLink.click();
+          } else {
+            card.click();
+          }
           await wait(1800);
 
           let detailPanel = null;
@@ -306,10 +343,19 @@ async function crawlPage(startIndex = 0) {
             const salaryEls = searchRoot.querySelectorAll(CONFIG.selectors.sidePanelSalary.join(", "));
             for (const el of salaryEls) {
               const text = el.innerText?.trim();
-              if (text && looksLikeSalary(text)) {
-                salary = text;
-                break;
+              if (text) {
+                const s = extractSalaryFromText(text) || (looksLikeSalary(text) ? text : null);
+                if (s) {
+                  salary = s;
+                  break;
+                }
               }
+            }
+
+            if (salary === "N/A" && detailPanel) {
+              const panelText = detailPanel.innerText?.slice(0, 3000) || '';
+              const s = extractSalaryFromText(panelText);
+              if (s) salary = s;
             }
 
             if (salary === "N/A") {
@@ -397,6 +443,7 @@ async function crawlPage(startIndex = 0) {
     if (nextBtn && !nextBtn.hasAttribute("aria-disabled")) {
       currentPage++;
       chrome.storage.local.set({ currentPage, allJobs, isCrawling, maxPages });
+      dismissPopups();
       nextBtn.scrollIntoView();
       nextBtn.click();
       return false;
@@ -552,6 +599,12 @@ async function initialize() {
 
     if (typeof data.resumeFromIndex === "number") {
       resumeFromIndex = data.resumeFromIndex;
+    }
+
+    if (location.hostname.includes('secure.indeed.com') || location.pathname.includes('/auth')) {
+      CrawlerUI.updateStatus("Vui lòng đăng nhập (chọn Continue with Google). Sau khi đăng nhập xong, hệ thống sẽ tự động cào tiếp!");
+      CrawlerUI.updateButtonStates(false, allJobs.length > 0);
+      return;
     }
 
     if (isPageNotFound()) {

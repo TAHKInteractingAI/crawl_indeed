@@ -34,8 +34,13 @@
       "#salaryInfoAndJobType span",
       "[data-testid=\"jobsearch-SalarySection\"]",
       "[data-testid=\"jobsearch-SalarySection\"] span",
+      "[data-testid=\"jobsearch-JobDescriptionHeader\"]",
+      ".jobsearch-JobDescriptionHeader",
+      "#jobDetailsSection",
+      "#jobDetailsSection [class*=\"salary\"]",
+      "[data-testid*=\"salary\"]",
       ".css-1cvvo1b",
-      "#jobDetailsSection [class*=\"salary\"]"
+      "#jobsearch-ViewjobPaneWrapper"
     ],
     "sidePanelApply": [
       ".jobsearch-IndeedApplyButton-newDesign",
